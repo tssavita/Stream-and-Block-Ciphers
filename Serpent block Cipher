@@ -1,0 +1,270 @@
+/*	Author : Savita Seetaraman
+	Date modified : Thurday December 11th, 2014
+	Cipher : Serpent (block) cipher in bit slice mode
+	Course : Algebraic Cryptography
+	Instructors : Massimiliano Sala, Pietro Peterlongo, Riccardo Aragona	*/
+
+
+
+/* The predefined Sboxes. */
+function sBoxArrays()
+	S := [];
+	S[1] := [[0, 0, 1, 1], [1, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 1], [1, 0, 1, 0], [0, 1, 1, 0], [0, 1, 0, 1], [1, 0, 1, 1], [1, 1, 1, 0], [1, 1, 0, 1], [0, 1, 0, 0], [0, 0, 1, 0], [0, 1, 1, 1], [0, 0, 0, 0], [1, 0, 0, 1], [1, 1, 0, 0]];
+	S[2] := [[1, 1, 1, 1], [1, 1, 0, 0], [0, 0, 1, 0], [0, 1, 1, 1], [1, 0, 0, 1], [0, 0, 0, 0], [0, 1, 0, 1], [1, 0, 1, 0], [0, 0, 0, 1], [1, 0, 1, 1], [1, 1, 1, 0], [1, 0, 0, 0], [0, 1, 1, 0], [1, 1, 0, 1], [0, 0, 1, 1], [0, 1, 0, 0]];
+	S[3] := [[1, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 1], [1, 0, 0, 1], [0, 0, 1, 1], [1, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1], [1, 1, 0, 1], [0, 0, 0, 1], [1, 1, 1, 0], [0, 1, 0, 0], [0, 0, 0, 0], [1, 0, 1, 1], [0, 1, 0, 1], [0, 0, 1, 0]];
+	S[4] := [[0, 0, 0, 0], [1, 1, 1, 1], [1, 0, 1, 1], [1, 0, 0, 0], [1, 1, 0, 0], [1, 0, 0, 1], [0, 1, 1, 0], [0, 0, 1, 1], [1, 1, 0, 1], [0, 0, 0, 1], [0, 0, 1, 0], [0, 1, 0, 0], [1, 0, 1, 0], [0, 1, 1, 1], [0, 1, 0, 1], [1, 1, 1, 0]];
+	S[5] := [[0, 0, 0, 1], [1, 1, 1, 1], [1, 0, 0, 0], [0, 0, 1, 1], [1, 1, 0, 0], [0, 0, 0, 0], [1, 0, 1, 1], [0, 1, 1, 0], [0, 0, 1, 0], [0, 1, 0, 1], [0, 1, 0, 0], [1, 0, 1, 0], [1, 0, 0, 1], [1, 1, 1, 0], [0, 1, 1, 1], [1, 1, 0, 1]];
+	S[6] := [[1, 1, 1, 1], [0, 1, 0, 1], [0, 0, 1, 0], [1, 0, 1, 1], [0, 1, 0, 0], [1, 0, 1, 0], [1, 0, 0, 1], [1, 1, 0, 0], [0, 0, 0, 0], [0, 0, 1, 1], [1, 1, 1, 0], [1, 0, 0, 0], [1, 1, 0, 1], [0, 1, 1, 0], [0, 1, 1, 1], [0, 0, 0, 1]];
+	S[7] := [[0, 1, 1, 1], [0, 0, 1, 0], [1, 1, 0, 0], [0, 1, 0, 1], [1, 0, 0, 0], [0, 1, 0, 0], [0, 1, 1, 0], [1, 0, 1, 1], [1, 1, 1, 0], [1, 0, 0, 1], [0, 0, 0, 1], [1, 1, 1, 1], [1, 1, 0, 1], [0, 0, 1, 1], [1, 0, 1, 0], [0, 0, 0, 0]];
+	S[8] := [[0, 0, 0, 1], [1, 1, 0, 1], [1, 1, 1, 1], [0, 0, 0, 0], [1, 1, 1, 0], [1, 0, 0, 0], [0, 0, 1, 0], [1, 0, 1, 1], [0, 1, 1, 1], [0, 1, 0, 0], [1, 1, 0, 0], [1, 0, 1, 0], [1, 0, 0, 1], [0, 0, 1, 1], [0, 1, 0, 1], [0, 1, 1, 0]];
+	return S;
+end function;
+
+/* Global variable */
+S := sBoxArrays();
+
+/* Support functions - rotateInputOutput, paddingSeq, shiftRotate, shiftPadzero, listXor. */
+
+/* Move the bytes of the input and output. Applied initially to the plain text and the end to the cipher text. */
+function rotateInputOutput(inout, len)
+	rotated := "";
+	i := 0;
+	while i in [0..(len-1)] do
+		j := 8;
+		while j gt 0 do
+			rotated := rotated cat (inout[i*8 + j-1] cat inout[i*8 + j]);
+			j -:= 2;
+		end while;
+		i +:= 1;
+	end while;
+	return rotated;
+end function;
+
+/* Padding the sequence with zeros at the end so that it is of length - 'len'. */
+function paddingSeq(X, len)
+	for i in [1..(len - #X)] do
+		X := Append(X, 0);
+	end for;
+	return X;
+end function;
+
+/* Rotate the sequence A, n times to the left. */
+function shiftRotate(A, n)
+	S_rotated := []; i := 1;
+
+	for i in [1..#A] do
+		S_rotated[i] := A[((i + n - 1) mod 32) + 1];
+	end for;
+
+	return S_rotated;
+end function;
+
+/* Shift the sequence A, n times to the left, and fill the right side with zeros. */
+function shiftPadzero(A, n)
+	S_shifted := []; i := 1;
+	S_shifted := A[1..(#A-n)];
+	n := (n-1) mod 8 + 1;
+	for i in [1..(#A-n)] do
+		S_shifted[i] := A[i+n];
+	end for;
+	i := n+1;
+	for i in [(#A-n+1)..#A] do
+		S_shifted := Append(S_shifted, 0);
+	end for;
+
+	return S_shifted;
+end function;
+
+/* Xor-ing of three lists. */
+function listXor(A, B, C)
+	ABC := []; i := 1;
+	for i in [1..32] do
+		ABC := Append(ABC, ((A[i] + B[i] + C[i]) mod 2));
+	end for;
+	return ABC;
+end function;
+
+/* Serpent Algorithm related functions - kschedule, mixingLayer, roundi, encryptSERPENT */
+
+/* Called at the beginning, to generate 33 round keys from the session key. */
+function kschedule(key)
+
+	j := 1; k := 0; m := 1; n := 1; o := 1; l := 1; rkey := []; J := []; J_rotated := [];
+
+	/* Formatting the provided key to match the format required by this computation method. */
+	key_rotated := rotateInputOutput(key, 8);
+	keyseq := Intseq(StringToInteger(key_rotated, 16), 2);
+	if #keyseq ne 256 then
+		keyseq := paddingSeq(keyseq, 256);
+	end if;
+	keyseq := Reverse(keyseq);
+
+	/* Separating the keystream into 8 words of 32 bits each. */
+	for i in [1..8] do
+		K := [];	
+		for j in [1..32] do
+			K := Append(K, keyseq[((i-1) * 32) + j]);
+		end for;
+		rkey[i] := K;
+	end for;
+
+	/* Golden_ration is the fractional part of (sqrt(5)+1)/2. */
+	golden_ratio := Reverse(Intseq(StringToInteger("9e3779b9", 16), 2));
+
+	k := 9;
+	for k in [9..140] do
+		J := [];
+
+		kseq := IntegerToSequence(k-9, 2);
+		if #kseq ne 32 then
+			kseq := paddingSeq(kseq, 32);
+		end if;
+		kseq := Reverse(kseq);
+
+		for l in [1..32] do			
+			J[l] := ((rkey[k-8][l] + rkey[k-5][l] + rkey[k-3][l] + rkey[k-1][l] + golden_ratio[l] + kseq[l]) mod 2);
+		end for;
+
+		J_rotated := shiftRotate(J, 11);
+		rkey[k] := J_rotated;
+ 	end for;
+
+	n := 1; k := 9; T1 := []; round_key := []; temp := 4;
+
+	/* Producing the 133 prekeys of 32 bits each, and then from them, producing the 33 round keys of 128 bits each. */
+	while k in [9..140] do
+		T1 := []; T2 := [];
+ 		for n in [1..32] do
+			T2 := [rkey[k][n], rkey[k+1][n], rkey[k+2][n], rkey[k+3][n]];
+			index := SequenceToInteger(T2, 2) + 1;
+			T2 := S[temp][index];
+			rkey[k+3][n] := T2[1];
+			rkey[k+2][n] := T2[2];
+			rkey[k+1][n] := T2[3];
+			rkey[k][n] := T2[4];
+		end for;
+		T1 := (T1 cat (rkey[k] cat (rkey[k+1] cat (rkey[k+2] cat rkey[k+3]))));
+		round_key[Floor(k/4)-1] := T1;
+		k := k + 4;
+		temp -:= 1;
+		if temp eq 0 then
+			temp := 8;
+		end if;
+	end while;
+
+	/* The 33 round keys of 128 bits each, are returned. */
+	return round_key, #round_key;
+end function;
+
+/* Linear transformation - It consists mainly of rotating, shifting and padding with zero and xor-ing functions. */
+function mixingLayer(after_Mixing)	
+
+	/* Separating the words to apply transformations differently. */
+	X0 := after_Mixing[1..32];
+	X1 := after_Mixing[33..64];
+	X2 := after_Mixing[65..96];
+	X3 := after_Mixing[97..128];
+
+	X0_ := Rotate(X0, -13);
+	X2_ := Rotate(X2, -3);
+	X1_ := listXor(X1, X0_, X2_);
+	
+	intermediate := [];
+	intermediate := shiftPadzero(X0_, 3);
+	X3_ := listXor(X3, X2_, intermediate);
+
+	X1_1 := Rotate(X1_, -1);
+
+	X3_1 := Rotate(X3_, -7);
+	X0_1 := listXor(X0_, X1_1, X3_1);
+
+	intermediate := [];
+	intermediate := shiftPadzero(X1_1, 7);
+	X2_1 := listXor(X2_, X3_1, intermediate);
+	X0_2 := Rotate(X0_1, -5);
+	X2_2 := Rotate(X2_1, -22);
+
+	after_Mixing := [];
+	after_Mixing := X0_2 cat (X1_1 cat (X2_2 cat X3_1));	
+
+	return after_Mixing;
+end function; 
+
+/* Round function : Called at each round */
+function roundi(input, K, round_number)
+
+	i := 1; j := 1; k := 0; before_Sb := []; after_Sb := []; after_KeyMix := []; after_Mixing := [];	
+
+	/* Xor-ing the corresponding bits of previous round output and current round_key. */
+	for j in [1..128] do
+		after_KeyMix := Append(after_KeyMix, ((input[j] + K[j]) mod 2));
+	end for;
+
+	T2 := []; T1 := []; after_Sb := [];
+
+	/* Applying S-box permutation to 4 bits of the output obtained after Key Mixing. */
+	temp := ((round_number-1) mod 8) + 1; i := 0;
+	for n in [1..32] do
+		T2 := [after_KeyMix[n], after_KeyMix[n+32], after_KeyMix[n+64], after_KeyMix[n+96]];
+		index := SequenceToInteger(T2, 2) + 1;
+		T2 := S[temp][index];
+		after_Sb[n] := T2[1];
+		after_Sb[n+32] := T2[2];
+		after_Sb[n+64] := T2[3];
+		after_Sb[n+96] := T2[4];
+	end for;
+	after_Sb_ := after_Sb[97..128];
+	after_Sb_ := after_Sb_ cat (after_Sb[65..96] cat (after_Sb[33..64] cat after_Sb[1..32]));
+
+	/* Applying the Mixing layer (Linear transformation) to the output assembled after applying S-box permutation. 
+	The Mixing Layer is applied only for the first 31 rounds. */
+	if round_number ne 32 then
+		after_Mixing := mixingLayer(after_Sb_);
+		return after_Mixing;
+	end if;
+
+	/* If round number = 32 the function returns from here. */
+	return after_Sb_;
+end function;
+
+/* Encryption function for Serpent block cipher. */
+function encryptSERPENT(key, plaintext)
+
+	i := 1; j := 1; round_keys := []; K := []; text := []; output := []; outputFinal := []; 
+	
+	/* Keyschedule to obtain 33 round keys from the given session key. */
+	round_keys := kschedule(key);
+
+	/* Formatting the provided plaintext to match the format required by this computation method. */
+	serpentformat := rotateInputOutput(plaintext, 4);
+	text := (Intseq(StringToInteger(serpentformat, 16), 2));
+	if #text ne 128 then
+		text := paddingSeq(text, 128);
+	end if;
+	text := Reverse(text);
+
+	/* Round 1 : text and round key 1 as input. */
+	K := round_keys[1];
+	output := roundi(text, K, 1);
+	
+	/* Rounds 2 to 31 : previous input and round key i as input, where i is the round number. */
+	i := 2;
+	for i in [2..32] do
+		K := round_keys[i];
+		output := roundi(output, K, i);
+	end for;
+
+	/* Round 33 */
+	K := round_keys[33];
+	for i in [1..128] do
+		outputFinal := Append(outputFinal, ((output[i] + K[i]) mod 2));
+	end for;
+	
+	/* Formatting the output to match the required output format. */
+	ciphertext := IntegerToString(Seqint(Reverse(outputFinal), 2), 16);
+	serpentformat_cipher := rotateInputOutput(ciphertext, 4);
+
+	/* Cipher stream in the required format (hexadecimal string). */
+	return serpentformat_cipher;	
+
+end function;
