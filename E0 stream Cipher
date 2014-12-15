@@ -1,0 +1,120 @@
+/*	Author : Savita Seetaraman
+	Date modified : Thurday December 11th, 2014
+	Cipher : E0 stream cipher
+	Course : Algebraic Cryptography
+	Instructors : Massimiliano Sala, Pietro Peterlongo, Riccardo Aragona	*/
+
+
+
+/* To convert to lower case to match the output format. */
+function toLower(y) 
+
+	y_ := "";
+	for i in [1..#y] do
+		a := StringToCode(y[i]);
+		if ((a gt 64) and (a lt 91)) then
+			y_ := y_ cat CodeToString(a + 32);
+		else
+			y_ := y_ cat y[i];
+		end if;
+	end for;
+
+	return y_;
+
+end function;
+
+/* To format the sequence of bits from registers, to match the required output format (hexadecimal string). */
+function outputFormatting(n)
+
+	y := ""; x := ""; y1 := "";
+	y := IntegerToString(SequenceToInteger(n, 2), 16);
+	ceil1 := Ceiling(#n/4);
+
+	if #y ne ceil1 then
+		for i in [1..(ceil1-#y)] do
+			x := x cat "0";
+		end for;
+		y := x cat y;
+	end if;
+
+	return y;
+
+end function;
+
+/* To format the given input (hexadecimal string) according to the requirements of the computation method used here. */
+function inputFormatting(L, max_len)	
+
+	n := Intseq(StringToInteger(L, 16), 2);
+
+	if #n ne max_len then
+		for i in [1..(max_len-#n)] do
+			n := Append(n, 0);
+		end for;
+	end if;
+
+	return n;
+
+end function;
+
+/* The primary function inside which the of E0 stream cipher takes place. */
+function clockE0(L1, L2, L3, L4, c2, c1, n_k)
+	
+	/* Formatting the input. */
+	n1 := inputFormatting(L1, 25); /* first register */
+	n2 := inputFormatting(L2, 31); /* second register */
+	n3 := inputFormatting(L3, 33); /* third register */
+	n4 := inputFormatting(L4, 39); /* fourth register */
+
+	K := [];
+	z_list := [];
+
+	/* At the end of each iteration, a bit of the final keystream is produced. */
+	for i in [1..n_k] do 
+
+		K := Append(K, ((n1[24] + n2[24] + n3[32] + n4[32] + c2[2]) mod 2));
+		z := Floor((n1[24] + n2[24] + n3[32] + n4[32] + (2 * c2[1]) + c2[2]) / 2);
+
+		case z:
+			when 0:
+				z_list := [0, 0];
+			when 1:
+				z_list := [0, 1];
+			when 2:
+				z_list := [1, 0];
+			when 3:
+				z_list := [1, 1];
+		end case;
+
+		c_ := (c1[2] + c1[1]) mod 2;
+		s := [((z_list[1] + c2[1] + c1[2]) mod 2), ((z_list[2] + c2[2] + c_) mod 2)];
+		c1 := c2;
+		c2 := s;
+
+		/* Updating the registers. */
+		t1 := (n1[25] + n1[20] + n1[12] + n1[8]) mod 2;
+		n1 := Rotate(n1,1);
+		n1[1] := t1;
+
+		t2 := (n2[31] + n2[24] + n2[16] + n2[12]) mod 2;
+		n2 := Rotate(n2,1);
+		n2[1] := t2;
+
+		t3 := (n3[33] + n3[28] + n3[24] + n3[4]) mod 2;
+		n3 := Rotate(n3,1);
+		n3[1] := t3;
+
+		t4 := (n4[39] + n4[36] + n4[28] + n4[4]) mod 2;
+		n4 := Rotate(n4,1);
+		n4[1] := t4;
+
+	end for;
+
+	/* Formatting the output. */
+	y1 := outputFormatting(n1); /* first register */
+	y2 := outputFormatting(n2); /* second register */
+	y3 := outputFormatting(n3); /* third register */
+	y4 := outputFormatting(n4); /* fourth register */
+
+	return K, y1, y2, y3, y4, c2, c1;
+
+end function;
